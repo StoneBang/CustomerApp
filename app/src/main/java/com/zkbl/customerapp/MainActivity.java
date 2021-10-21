@@ -45,9 +45,21 @@ public class MainActivity extends AppCompatActivity {
 //        Command command = new Command("startReceive","");
         Map<String,String> command = new HashMap<>();
         command.put("command","startReceive");
-        command.put("data","12123123");
+        command.put("data","");
         JSONObject jsonObject = new JSONObject(command);
         intent.putExtra("command",jsonObject.toString());
         sendBroadcast(intent);
+    }
+
+    public void cancelClick(View view) {
+        Intent intent = new Intent();
+        intent.setAction("com.cdgsafety.pms.rfid.command");
+        Map<String,String> command = new HashMap<>();
+        command.put("command","stopReceive");
+        command.put("data","");
+        JSONObject jsonObject = new JSONObject(command);
+        intent.putExtra("command",jsonObject.toString());
+        sendBroadcast(intent);
+
     }
 }
