@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Intent;
 import android.media.AudioManager;
 import android.media.SoundPool;
+import android.os.Build;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityEvent;
@@ -36,8 +37,9 @@ public class KeyCodeService extends AccessibilityService {
     private ModuleConnector connector;
     private int baud = 115200;
     private RFIDReaderHelper mReaderHelper;
+    private ReaderSetting mReaderSetting = ReaderSetting.newInstance();
+    private String mode;
     private static final String TAG = "COONECTRS232";
-
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
 
@@ -75,14 +77,51 @@ public class KeyCodeService extends AccessibilityService {
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void excuteCommand(CommandMessage command){
-        if(command.getCommand().contains("startReceive")){
+        String cmd = command.getCommand();
+        String cmdId = command.getCommandId();
+        mode = command.getMode();
+        int power = command.getPower();
+        if(cmd.contains("startReceive")){
             ModuleManager.newInstance().setUHFStatus(true);
+            if("单标签".equals(mode)){
+
+            }else if("多标签".equals(mode)){
+
+            }else{
+
+            }
+            setPower(power);
             Log.e(TAG, "excuteCommand: 上电成功" );
-        }else{
+        }else if(cmd.contains("stopReceive")){
             ModuleManager.newInstance().setUHFStatus(false);
             Log.e(TAG, "excuteCommand: 上电失败" );
+        }else if(cmd.contains("setPower")){
+            setPower(power);
+        }else if(cmd.contains("getDeviceInfo")){
+            sendDeviceInfo(cmdId);
+            //打印设备信息
+            //System.out.println(Build.MANUFACTURER +"\n"+Build.MODEL+"\n"+Tools.getSerialNumber());
+        }else{ }
+    }
+
+    //设置发射功率
+    public void setPower(int power){
+        //在指定范围内才让你设置
+        if(power>=15 && power<=30){
+            byte btOutputPower = 0x00;
+            try {
+                btOutputPower = (byte)power;
+                mReaderHelper.setOutputPower(mReaderSetting.btReadId, btOutputPower);
+                mReaderSetting.btAryOutputPower = new byte[]{btOutputPower};
+                Log.e(TAG, "setPower: success");
+            } catch (Exception e) {
+                Log.e(TAG, "setPower: fail");
+            }
         }
     }
+
+
+    //初始化RFID
     public void initRFID() {
         try {
             connector = new ReaderConnector();
@@ -119,6 +158,11 @@ public class KeyCodeService extends AccessibilityService {
                             super.onInventoryTagEnd(tagEnd);
 //                            BeeperUtils.beep(BeeperUtils.BEEPER);
                             mSoundPool.play(2, 1, 1, 0, 0, 1);
+                            if("单标签".equals(mode)){
+
+                            }else if("多标签".equals(mode)){
+
+                            }
                             sendEpc();
                             Log.e(TAG, "盘存结束" );
                         }
@@ -146,10 +190,12 @@ public class KeyCodeService extends AccessibilityService {
             Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
+
+    //发送多扫描数据
     public void sendEpc(){
         Map<String,String> data = new HashMap<>();
         data.put("status","success");
-        data.put("message","ok");
+        data.put("commandId","rfid-data");
         List<String> epcList =  GreenDaoUtils.getInstance(getApplicationContext()).queryRFID();
         StringBuilder resBuild = new StringBuilder();
         for (int i=0;i<epcList.size();i++){
@@ -161,11 +207,62 @@ public class KeyCodeService extends AccessibilityService {
             }
         }
         data.put("data",resBuild.toString());
+        data.put("message","scan-ok");
+
         JSONObject jsonObject = new JSONObject(data);
         Intent callBack = new Intent();
         callBack.setAction("com.cdgsafety.pms.rfid.data");
         callBack.putExtra("data",jsonObject.toString());
         sendBroadcast(callBack);
         Log.e(TAG, "我方发送RFID给他了");
+    }
+
+
+    //发送单扫描数据
+    public void sendSingleEpc(){
+        Map<String,String> data = new HashMap<>();
+        data.put("status","success");
+        data.put("commandId","rfid-data");
+        List<String> epcList =  GreenDaoUtils.getInstance(getApplicationContext()).queryRFID();
+        StringBuilder resBuild = new StringBuilder();
+        for (int i=0;i<1;i++){
+                resBuild.append(epcList.get(i));
+
+        }
+        data.put("data",resBuild.toString());
+        data.put("message","scan-ok");
+
+        JSONObject jsonObject = new JSONObject(data);
+        Intent callBack = new Intent();
+        callBack.setAction("com.cdgsafety.pms.rfid.data");
+        callBack.putExtra("data",jsonObject.toString());
+        sendBroadcast(callBack);
+        Log.e(TAG, "我方发送RFID给他了");
+    }
+
+
+
+    //发送扫描数据
+    public void sendDeviceInfo(String commandId){
+        Map<String,String> data = new HashMap<>();
+        data.put("status","success");
+        data.put("commandId",commandId);
+        data.put("data",getDeviceJsonString());
+        data.put("message","deviceInfo-ok");
+        JSONObject jsonObject = new JSONObject(data);
+        Intent callBack = new Intent();
+        callBack.setAction("com.cdgsafety.pms.rfid.data");
+        callBack.putExtra("data",jsonObject.toString());
+        sendBroadcast(callBack);
+        Log.e(TAG, "设备信息发送成功给他了"+jsonObject.toString());
+    }
+
+    public String getDeviceJsonString(){
+        Map<String,String> deviceInfo = new HashMap<>();
+        deviceInfo.put("deviceName",Build.MODEL);
+        deviceInfo.put("factroyName",Build.MANUFACTURER);
+        deviceInfo.put("deviceSN",Tools.getSerialNumber());
+        JSONObject deviceJsonObject = new JSONObject(deviceInfo);
+        return deviceJsonObject.toString();
     }
 }
